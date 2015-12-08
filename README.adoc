@@ -39,7 +39,7 @@ Dan Hyun <hyun.danny@gmail.com> <@Lspacewalker>
 === Gradle
 
 * Gradle wrapper - batteries included (`gradlew`)
-* Consistant, reproducible builds
+* Consistent, reproducible builds
   - Avoid "Works On My Machine" syndrome
 * Great IDE integration
 * Continuous build mode (TDD)
@@ -132,7 +132,7 @@ Supported by many IDEs, e.g. IntelliJ kbd:[CTRL + ALT + L]
 === Docker
 
 * Nice functionality around LXC
-* Images, fs layer snapshotting
+* Images, file-system layer snap-shotting
 * Lighter than Virtualization
 ** Total size
 ** Boot Time
@@ -710,7 +710,7 @@ Main command to execute:
 
 .Procfile
 ----
-web: env DATABASE_URL=$DATABASE_URL build/installShadow/demo1/bin/demo1 redis.url=$REDIS_URL
+web: env DATABASE_URL=$DATABASE_URL build/installShadow/modern-java-web/bin/modern-java-web redis.url=$REDIS_URL
 ----
 
 Ratpack can pick up config information from just about anywhere.
@@ -742,9 +742,9 @@ heroku-cli: Updating... done.
 https://devcenter.heroku.com/articles/heroku-redis
 
 1. Install Plugin ```heroku plugins:install heroku-redis```
-1. Add to app `heroku addons:create heroku-redis:hobby-dev -a $app`
+1. Add to app `heroku addons:create heroku-redis:hobby-dev`
 1. Pass `$REDIS_URL` to your app
-1. Heroku redis-cli `heroku redis:cli -a $app`
+1. Heroku redis-cli `heroku redis:cli`
 
 === Heroku Postgresql
 

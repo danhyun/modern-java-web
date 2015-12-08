@@ -1,0 +1,848 @@
+= Modern Java Web Development
+Dan Hyun <hyun.danny@gmail.com> <@Lspacewalker>
+:experimental:
+:icons: font
+:sectanchors:
+:sectlinks:
+
+== What Is Modern Web Development?
+
+* Good Developer Experience
+** Fast feedback loop
+** Good testability
+** JustWorks (TM)
+* No more WAR!
+* http://12factor.net[12 Factor App]
+
+== Toolbox
+
+* <<Java 8>> (<<Ratpack>>, http://redis.paluch.biz/[Lettuce], http://javaslang.com/[Javaslang], <<jOOQ>>)
+* <<Gradle>>
+* <<EditorConfig>>
+* <<Docker>>
+* <<Heroku>>
+
+* Twitter! Follow https://twitter.com/Lspacewalker[@Lspacewalker]
+
+
+=== Java 8
+
+* Java 6 EOL 2013-02
+* Java 7 EOL 2015-02
+* Java 9 2016 Q4 (2017 late Q1? Jigsaw extension)
+* `λ -> {}`
+* Interface Upgrade
+** Default and static methods
+* Stream API
+
+
+=== Gradle
+
+* Gradle wrapper - batteries included (`gradlew`)
+* Consistant, reproducible builds
+  - Avoid "Works On My Machine" syndrome
+* Great IDE integration
+* Continuous build mode (TDD)
+  - `./gradlew -t or ./gradlew --continuous`
+
+==== Gradle bootstrap
+
+`gradle init` gives you...
+
+gradlew and gradlew.bat::
+  Gradle wrapper scripts
+
+build.gradle::
+  Main build file, specifies plugins, tasks, dependencies
+
+settings.gradle::
+  Extra project metadata settings
+
+.Indispensable plugins
+1. `application`
+  a. Create ops friendly distributions
+  a. Don't forget to set `mainClassName`
+1. https://github.com/johnrengelman/shadow[Gradle Shadow Plugin]
+  a. Creates "fat jars", plays nicely with `application` plugin
+1. `idea`
+  a. Customize IntelliJ project/module/workspace
+  a. Don't VCS IDE settings
+
+.New plugins method https://docs.gradle.org/current/dsl/org.gradle.plugin.use.PluginDependenciesSpec.html[(Incubating feature)]
+[source, gradle]
+----
+plugins {
+  id 'java'
+  id 'idea'
+  id 'com.github.johnrengelman.shadow' version '1.2.2'
+  // id "$id" version "$version"
+}
+----
+
+.Customize IntelliJ Integration
+[source, gradle]
+----
+idea {
+  project {
+    jdkName = '1.8' // <1>
+    languageLevel = '1.8' // <2>
+    vcs = 'Git' // <3>
+  }
+}
+----
+<1> Set JDK to 1.8
+<2> Set target language level to 1.8
+<3> Set VCS manager to Git
+
+=== Producing artifacts
+
+`./gradlew shadowJar`
+
+Produces executable jar with flattened dependencies.
+
+`./gradlew installShadowApp`
+
+Produces executable jar and shell scripts for starting jar. Can also produce zip file via `./gradlew distShadowZip` or tar via `./gradlew distShadowTar`
+
+=== EditorConfig
+
+.What is http://editorconfig.org/#overview[EditorConfig]?
+> EditorConfig helps developers define and maintain consistent coding styles between different editors and IDEs.
+
+Don't argue about formatting, pick a standard and stick to it.
+
+.Sample .editorconfig
+[source, python]
+----
+root = true
+
+[*] # for all files
+indent_style = space
+indent_size  = 2
+
+# We recommend you to keep these unchanged
+end_of_line              = lf
+charset                  = utf-8
+trim_trailing_whitespace = true
+insert_final_newline     = true
+----
+
+Supported by many IDEs, e.g. IntelliJ kbd:[CTRL + ALT + L]
+
+=== Docker
+
+* Nice functionality around LXC
+* Images, fs layer snapshotting
+* Lighter than Virtualization
+** Total size
+** Boot Time
+* Counters "Works On My Machine" syndrome
+* Nice way to bring up services/dependencies/mechanisms that may not be available for your OS
+
+==== docker-machine
+
+* Tool to provision Docker ready VM for Mac/Win
+
+Once setup, you need to inform your environment about the VM.
+
+.Ask docker-machine about default's environment config
+```
+$ docker-machine env default
+export DOCKER_TLS_VERIFY="1"
+export DOCKER_HOST="tcp://192.168.99.100:2376"
+export DOCKER_CERT_PATH="C:\Users\danny\.docker\machine\machines\default"
+export DOCKER_MACHINE_NAME="default"
+# Run this command to configure your shell:
+# eval "$(C:\Program Files\Docker Toolbox\docker-machine.exe env default)"
+```
+
+==== Dockerized Redis
+
+.Dockerfile
+[source, docker]
+----
+FROM ubuntu:14.04 # <1>
+RUN apt-get update && apt-get install -y redis-server # <2>
+EXPOSE 6379 # <3>
+ENTRYPOINT ["/usr/bin/redis-server"] # <4>
+----
+<1> Base image from Ubuntu Trusty image
+<2> Install Redis into new image
+<3> Declare that container is listening on port 6379
+<4> Start Redis server when container starts
+
+http://docs.docker.com/engine/reference/builder/[Dockerfile reference]
+
+.bash
+```
+$ docker build -t danhyun/redis .
+$ docker run --name redis -d -p 6379:6379 danhyun/redis
+$ docker exec -it redis bash
+
+root@d42014247c2e:/# redis-cli
+127.0.0.1:6379> set hello world
+OK
+127.0.0.1:6379> get hello
+"world"
+127.0.0.1:6379> del hello
+(integer) 1
+127.0.0.1:6379> get hello
+(nil)
+```
+
+==== Dockerized Postgres
+
+.Create new PostgreSQL container from existing Dockerfile
+```
+$ docker run --name postgres -e POSTGRES_PASSWORD=password -d -p 5432:5432 postgres
+```
+
+This command pulls down a `postgres` Docker image from https://hub.docker.com/_/postgres/[Docker Hub], names the container `postgres`, detaches from session, maps container's port 5432 to local port 5432.
+
+.Access PostgreSQL from running container's command line
+```
+$ docker exec -it postgres bash
+root@b1db931a37a7:/# psql -U postgres
+psql (9.4.5)
+Type "help" for help.
+
+postgres=# \l
+postgres=# create database modern;
+CREATE DATABASE
+postgres=# \c modern
+You are now connected to database "modern" as user "postgres".
+
+modern=# create table meeting (
+  id serial primary key,
+  organizer varchar(255),
+  topic varchar(255),
+  description text
+);
+
+CREATE TABLE
+
+modern=#insert into meeting
+  (organizer, topic, description)
+values
+  ('Dan H', 'Modern Java Web Development', 'A survey of essential tools/frameworks/techniques for the modern Java developer');
+
+INSERT 0 1
+
+modern=# select * from meeting;
+ id | organizer |            topic            |                                  description
+----+-----------+-----------------------------+--------------------------------------------------------------------------------
+  1 | Dan H     | Modern Java Web Development | A survey of essentia tools/frameworks/techniques for the modern Java developer
+(1 row)
+```
+
+=== Heroku
+
+* Free signup
+* Rapid prototyping (free versions of services available)
+
+=== Install Heroku Toolbelt
+
+Get the Heroku toolbelt https://toolbelt.heroku.com/[here]
+
+=== Prepare app for Heroku
+
+Heroku only needs 2 things:
+
+1. `Procfile` - tells Heroku what to execute
+1. A `stage` task from Gradle
+
+
+== Ratpack
+
+* JDK 8+
+  - just jar files, no binaries to install, no codegen
+* Minimal framework overhead (low resource usage, save $$$)
+* Unopinionated - Make your app solve your problems, don't let framework get in the way
+* Reactive, Non-blocking and fully asynchronous
+* Excellent testing support
+
+
+=== Handlers
+
+* Functional interface
+* `void handle(Context context) {}`
+* send response now or delegate to the next handler
+
+=== Chain
+
+* convenience API for specifying request handling flow
+* "if-else" for handlers
+* Chains are composable
+
+=== Registry
+
+* Map like lookup for services
+* Immutable
+* Way to communicate between handlers
+
+=== Async
+
+* Promises
+* Operations
+* Blocking
+
+== HikariCP
+
+Blazing fast JDBC library.
+
+https://github.com/brettwooldridge/HikariCP/wiki/Down-the-Rabbit-Hole[Technical details]
+
+=== Config
+
+Configure HikariCP to use our dockerized PostgreSQL instance.
+
+.postgres.yaml
+[source, yaml]
+----
+db:
+  dataSourceClassName: org.postgresql.ds.PGSimpleDataSource
+  username: postgres
+  password: password
+  dataSourceProperties:
+    databaseName: modern
+    serverName: 192.168.99.100
+    portNumber: 5432
+----
+
+=== Apply Config
+
+[source, java]
+.Configure Hikari DataSource provider
+----
+.module(HikariModule.class, config -> {
+  config
+    .setDataSourceClassName("org.postgresql.ds.PGSimpleDataSource");
+  config.setUsername("postgres");
+  config.setPassword("password");
+  config.addDataSourceProperty("databaseName", "modern");
+  config.addDataSourceProperty("serverName", "192.168.99.100");
+  config.addDataSourceProperty("portNumber", "5432");
+})
+----
+
+
+.Use a Config Object
+[source, java]
+----
+.bindInstance(HikariConfig.class, configData.get("/db", HikariConfig.class))
+.module(HikariModule.class)
+----
+
+.Even better
+[source, java]
+----
+ServerConfig configData = ServerConfig.builder()
+      .baseDir(BaseDir.find())
+      .yaml("db.yaml")
+      .env()
+      .sysProps()
+      .args(args)
+      .require("/db", HikariConfig.class)
+      .build();
+----
+
+== jOOQ
+
+* Type Safe fluent style API for accessing DB
+* http://www.jooq.org/doc/3.7/manual/code-generation/codegen-gradle/[Automatic code generation based on your schema]
+
+.build.gradle
+----
+buildscript {
+  repositories {
+    jcenter()
+  }
+  dependencies {
+    classpath 'org.postgresql:postgresql:9.4-1206-jdbc42'
+    classpath 'org.jooq:jooq-codegen:3.7.1'
+    classpath 'org.jyaml:jyaml:1.3'
+  }
+}
+
+dependencies {
+  runtime 'org.postgresql:postgresql:9.4-1206-jdbc42'
+  compile 'org.jooq:jooq:3.7.1'
+
+  compile ratpack.dependency('hikari')
+}
+
+import org.jooq.util.jaxb.*
+import org.jooq.util.*
+import org.ho.yaml.Yaml
+
+task jooqCodegen {
+  doLast {
+    def config = Yaml.load(file('src/ratpack/postgres.yaml')).db
+    def dsProps = config.dataSourceProperties
+
+    Configuration configuration = new Configuration()
+      .withJdbc(new Jdbc()
+        .withDriver("org.postgresql.Driver")
+        .withUrl("jdbc:postgresql://$dsProps.serverName:$dsProps.portNumber/$dsProps.databaseName")
+        .withUser(config.username)
+        .withPassword(config.password))
+      .withGenerator(new Generator()
+//        .withGenerate(new Generate()
+//          .withImmutablePojos(true) // <1>
+//          .withDaos(true)           // <2>
+//          .withFluentSetters(true)) // <3>
+        .withDatabase(new Database()
+          .withName("org.jooq.util.postgres.PostgresDatabase")
+          .withIncludes(".*")
+          .withExcludes("")
+          .withInputSchema("public"))
+      .withTarget(new Target()
+        .withPackageName("jooq")
+        .withDirectory("src/main/java")))
+
+    GenerationTool.generate(configuration)
+  }
+}
+----
+<1> Generates immutable POJOs
+<2> Generates DAOs
+<3> Generates fluent setters for generated Records/POJOs/Interfaces
+
+=== Hikari and jOOQ
+
+
+`DSLContext` provides type-safe fluent API style querying.
+jOOQ will responsibly borrow and release connections from the provided `DataSource`.
+
+[source, java]
+.DefaultMeetingRepository.java
+----
+public class DefaultMeetingRepository implements MeetingRepository {
+  private final DSLContext context;
+
+  @Inject
+  public DefaultMeetingRepository(DSLContext context) {
+    this.context = context;
+  }
+
+  @Override
+  public Promise<List<Meeting>> getMeetings() {
+    return Blocking.get(() ->
+      context
+        .select().from(MEETING).fetchInto(Meeting.class) // <1>
+    );
+  }
+
+  @Override
+  public Operation addMeeting(Meeting meeting) {
+    return Blocking.op(() -> context.newRecord(MEETING, meeting).store());
+  }
+}
+----
+<1> `fetchInto(Class)` provides SQL to POJO mapping. POJOs can be generated by jOOQ if desired.
+
+[source, java]
+.JooqModule.java
+----
+public class JooqModule extends AbstractModule {
+  @Override
+  protected void configure() {
+    bind(MeetingRepository.class).to(DefaultMeetingRepository.class).in(Scopes.SINGLETON);
+  }
+
+  @Provides
+  @Singleton
+  public DSLContext dslContext(DataSource dataSource) {
+    return DSL.using(new DefaultConfiguration().derive(dataSource));
+  }
+}
+----
+
+== Redis
+
+[source, gradle]
+.build.gradle
+----
+dependencies {
+  compile 'biz.paluch.redis:lettuce:4.0.1.Final'
+}
+----
+
+[source, yaml]
+.redis.yaml
+----
+redis:
+  host: 192.168.99.100
+  port: 6379
+----
+
+[source, java]
+.RedisConfig.java
+----
+public class RedisConfig {
+  private String url;
+
+  public String getUrl() {
+    return url;
+  }
+
+  public void setUrl(String url) {
+    this.url = url;
+  }
+}
+----
+
+[source, java]
+.App.java
+----
+RatpackServer.start(ratpackServerSpec -> ratpackServerSpec
+      .serverConfig(config -> config
+        .baseDir(BaseDir.find())
+        .yaml("postgres.yaml")
+        .yaml("redis.yaml")
+        .env()
+        .sysProps()
+        .args(args)
+        .require("/db", HikariConfig.class)
+        .require("/redis", RedisConfig.class) // <1>
+      )
+----
+<1> Add `RedisConfig` to the Registry
+
+[source, java]
+.RedisModule.java
+----
+public class RedisModule extends AbstractModule {
+  @Override
+  protected void configure() { }
+
+  @Provides
+  @Singleton
+  public RedisClient redisClient(RedisConfig config) { // <1>
+    return RedisClient.create(config.getUrl());
+  }
+
+  @Provides
+  @Singleton
+  public StatefulRedisConnection<String, String> asyncCommands(RedisClient client) {
+    return client.connect();
+  }
+
+  @Provides
+  @Singleton
+  public RedisAsyncCommands<String, String> asyncCommands(StatefulRedisConnection<String, String> connection) {
+    return connection.async();
+  }
+
+  @Provides
+  @Singleton
+  public Service redisCleanup(RedisClient client, StatefulRedisConnection<String, String> connection) {
+    return new Service() { // <2>
+      @Override
+      public void onStop(StopEvent event) throws Exception {
+        connection.close(); // <3>
+        client.shutdown(); // <3>
+      }
+    };
+  }
+}
+----
+<1> Get `RedisConfig` from Registry
+<2> `Service` provides an opportunity to hook into Ratpack's start/stop lifecycle events
+<3> Cleanup Redis connection and client
+
+[source, java]
+.RatingRepository.java
+----
+public interface RatingRepository {
+  Promise<Map<String, String>> getRatings(Long meetingId);
+
+  default Promise<Double> getAverageRating(Long meetingId) {
+    return getRatings(meetingId)
+      .map(m -> m.entrySet()
+        .stream()
+        .map(e -> Pair.of(Integer.valueOf(e.getKey()), Integer.valueOf(e.getValue())))
+        .flatMapToInt(pair -> IntStream.range(0, pair.right).map(i -> pair.left))
+        .average().orElse(0d)
+    );
+  }
+
+  Operation rateMeeting(String meetingId, String rating);
+}
+----
+
+[source, java]
+.DefaultRatingRepository.java
+----
+public class DefaultRatingRepository implements RatingRepository {
+  private final RedisAsyncCommands<String, String> commands;
+
+  @Inject
+  public DefaultRatingRepository(RedisAsyncCommands<String, String> commands) {
+    this.commands = commands;
+  }
+
+  Function<Long, String> getKeyForMeeting = (id) -> "meeting:" + id + ":rating";
+
+  @Override
+  public Promise<Map<String, String>> getRatings(Long meetingId) {
+    return Promise.of(downstream ->
+      commands
+        .hgetall(getKeyForMeeting.apply(meetingId)) // <1>
+        .thenAccept(downstream::success) // <2>
+    );
+  }
+
+  @Override
+  public Operation rateMeeting(String meetingId, String rating) {
+    return Promise.of(downstream ->
+      commands.hincrby(
+        getKeyForMeeting.apply(Long.valueOf(meetingId)),
+        String.valueOf(rating), 1
+      ).thenAccept(downstream::success)
+    ).operation();
+  }
+}
+----
+<1> Equivalent of `HGETALL meeting:$id:rating`
+<2> Signal to downstream consumer that Lettuce is done with async activity
+
+== Composing data from Postgres and Redis
+
+[source, java]
+.MeetingService.java
+----
+public interface MeetingService {
+  Promise<List<Meeting>> getMeetings();
+  Operation addMeeting(Meeting meeting);
+  Operation rateMeeting(String id, String rating);
+}
+----
+
+[source, java]
+.DefaultMeetingService.java
+----
+public class DefaultMeetingService implements MeetingService {
+
+  private final MeetingRepository meetingRepository;
+  private final RatingRepository ratingRepository;
+
+  public DefaultMeetingService(MeetingRepository meetingRepository, RatingRepository ratingRepository) {
+    this.meetingRepository = meetingRepository;
+    this.ratingRepository = ratingRepository;
+  }
+
+  @Override
+  public Promise<List<Meeting>> getMeetings() {
+    return meetingRepository.getMeetings()
+      .flatMap(meetings ->
+        Promise.value(
+          meetings.stream()
+          .peek(meeting ->
+            ratingRepository.getAverageRating(meeting.getId())
+              .then(meeting::setRating) // <1>
+          )
+          .collect(Collectors.toList()))
+      );
+  }
+
+  @Override
+  public Operation addMeeting(Meeting meeting) {
+    return meetingRepository.addMeeting(meeting);
+  }
+
+  @Override
+  public Operation rateMeeting(String id, String rating) {
+    return ratingRepository.rateMeeting(id, rating);
+  }
+}
+----
+<1> This is naughty, don't perform side effects
+
+Create a new module to register our `RatingRepository` and `MeetingService`
+
+[source,java]
+.MeetingModule
+----
+public class MeetingModule extends AbstractModule {
+  @Override
+  protected void configure() {
+  }
+
+  @Provides
+  @Singleton
+  public RatingRepository ratingRepository(RedisAsyncCommands<String, String> commands) {
+    return new DefaultRatingRepository(commands);
+  }
+
+  @Provides
+  @Singleton
+  public MeetingService meetingService(MeetingRepository meetingRepository, RatingRepository ratingRepository) {
+    return new DefaultMeetingService(meetingRepository, ratingRepository);
+  }
+}
+----
+
+[source, java]
+.App.java
+----
+public class App {
+  public static void main(String[] args) throws Exception {
+    RatpackServer.start(serverSpec -> serverSpec
+      .serverConfig(/*config*/)
+      .registry(Guice.registry(bindings -> bindings
+        .module(HikariModule.class)
+        .module(JooqModule.class)
+        .module(RedisModule.class)
+        .module(MeetingModule.class) // <1>
+        .bind(MeetingChainAction.class)
+      ))
+      .handlers(/*handlers*/)
+    );
+  }
+}
+----
+<1> Register our new module with the app
+
+== Deploying to Heroku
+
+Main command to execute:
+
+.Procfile
+----
+web: env DATABASE_URL=$DATABASE_URL build/installShadow/demo1/bin/demo1 redis.url=$REDIS_URL
+----
+
+Ratpack can pick up config information from just about anywhere.
+Here we expose `DATABASE_URL` as an env variable and pass in `REDIS_URL` as `redis.url` as a program arg.
+
+.Gradle staging task
+----
+task stage(dependsOn: installShadowApp)
+----
+
+=== Create the Heroku app
+
+[source, bash]
+.bash
+----
+$ heroku create
+Creating gentle-beyond-5974... done, stack is cedar-14 // <1>
+https://gentle-beyond-5974.herokuapp.com/ | https://git.heroku.com/gentle-beyond-5974
+.git // <3>
+Git remote heroku added // <2>
+heroku-cli: Updating... done.
+----
+<1> `cedar-14` is the Java 8 platform, Heroku's default Java offering
+<2> Generated app name `gentle-beyond-5974`
+<3> Added git remote named `heroku`
+
+=== Heroku Redis
+
+https://devcenter.heroku.com/articles/heroku-redis
+
+1. Install Plugin ```heroku plugins:install heroku-redis```
+1. Add to app `heroku addons:create heroku-redis:hobby-dev -a $app`
+1. Pass `$REDIS_URL` to your app
+1. Heroku redis-cli `heroku redis:cli -a $app`
+
+=== Heroku Postgresql
+
+https://devcenter.heroku.com/articles/heroku-postgresql
+
+1. Add PostgreSQL to app `heroku addons:create heroku-postgresql:hobby-dev`
+1. Wait to come online `heroku pg:wait`
+1. Pass `$DATABASE_URL` to app
+1. Connect to remote `heroku pg:psql` (Requires psql installed locally)
+
+=== Parsing Heroku's Postgres URL
+
+Heroku exposes the Postgres URL in a format that JDBC cannot parse.
+
+[source, java]
+.HerokuUtils.java
+----
+public interface HerokuUtils {
+  Function<String, List<String>> extractDbProperties = (url) -> {
+    if (Strings.isNullOrEmpty(url)) return Collections.<String>emptyList();
+
+    Pattern herokuDbPattern = Pattern
+      .compile("postgres://(?<username>[^:]+):(?<password>[^:]+)@(?<serverName>[^:]+):(?<portNumber>[0-9]+)/(?<databaseName>.+)"); // <1>
+
+    Matcher matcher = herokuDbPattern.matcher(url);
+    if (!matcher.matches()) return Collections.<String>emptyList();
+
+    return Stream
+      .of("username", "password", "databaseName", "serverName", "portNumber")
+      .map(prop -> Pair.of(prop, matcher.group(prop))) // <2>
+      .map(pair -> pair.left.equals(pair.left.toLowerCase()) ?
+          pair : Pair.of("dataSourceProperties." + pair.left, pair.right)
+      )
+      .map(pair -> Pair.of("db." + pair.left, pair.right))
+      .map(pair -> pair.left + "=" + pair.right)
+      .collect(Collectors.toList());
+  };
+}
+----
+<1> As of Java 7 you can provide group names in regex
+<2> We ask for match by group name and construct a `Pair` of property to extracted value
+
+[source, java]
+.App.java
+----
+public class App {
+  public static void main(String[] args) throws Exception {
+    List<String> programArgs = Lists.newArrayList(args);
+    programArgs.addAll(
+      HerokuUtils.extractDbProperties
+        .apply(System.getenv("DATABASE_URL")) // <1>
+    );
+
+    RatpackServer.start(serverSpec -> serverSpec
+      .serverConfig(config -> config
+        .baseDir(BaseDir.find())
+        .yaml("postgres.yaml")
+        .yaml("redis.yaml")
+        .env()
+        .sysProps()
+        .args(programArgs.stream().toArray(String[]::new)) //<2>
+        .require("/db", HikariConfig.class)
+        .require("/redis", RedisConfig.class)
+      )
+      .registry(/* registry */)
+      .handlers(/* handlers */)
+    );
+  }
+}
+----
+<1> Extract db properties if present
+<2> Pass newly constructed list to Ratpack's server config
+
+=== Push to Heroku
+
+[source, bash]
+----
+$ git push heroku master
+remote:        BUILD SUCCESSFUL
+remote:
+remote:        Total time: 40.614 secs
+remote: -----> Discovering process types
+remote:        Procfile declares types -> web
+remote:
+remote: -----> Compressing... done, 71.3MB
+remote: -----> Launching... done, v4
+remote:        https://gentle-beyond-5974.herokuapp.com/ deployed to Heroku
+remote:
+remote: Verifying deploy... done.
+----
+
+Heroku will see that this is a Gradle project and invoke `./gradlew stage`.
+
+After the build Heroku will run the command from `Procfile`.
+
+[source, bash]
+----
+$ heroku open
+----
+
+Opens your newly minted webapp in your browser.

@@ -1,0 +1,8 @@
+db:
+  dataSourceClassName: org.postgresql.ds.PGSimpleDataSource
+  username: postgres
+  password: password
+  dataSourceProperties:
+    databaseName: modern
+    serverName: 192.168.99.100
+    portNumber: 5432

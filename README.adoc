@@ -16,7 +16,7 @@ Dan Hyun <hyun.danny@gmail.com> <@Lspacewalker>
 
 == Toolbox
 
-* <<Java 8>> (<<Ratpack>>, http://redis.paluch.biz/[Lettuce], http://javaslang.com/[Javaslang], <<jOOQ>>)
+* <<Java 8>> (<<Ratpack>>, http://redis.paluch.biz/[Lettuce], https://www.vavr.io/[vavr], <<jOOQ>>)
 * <<Gradle>>
 * <<EditorConfig>>
 * <<Docker>>
